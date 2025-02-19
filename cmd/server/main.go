@@ -2,52 +2,72 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"guess_game/internal/handlers"
-	"guess_game/internal/storage"
 	"log"
 	"net/http"
 	"os"
 	"time"
+
+	"guess_game/internal/handlers"
+	"guess_game/internal/storage"
 )
 
-// healthHandler — простой обработчик, возвращающий "OK"
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "OK")
+func main() {
+	ctx := context.Background()
+
+	// 1. Считываем окружение для PostgreSQL
+	dbHost := getEnv("DB_HOST", "localhost")
+	dbPort := getEnv("DB_PORT", "5432")
+	dbUser := getEnv("DB_USER", "postgres")
+	dbPass := getEnv("DB_PASS", "postgres")
+	dbName := getEnv("DB_NAME", "guessdb")
+
+	// 2. Инициализация PostgreSQL
+	db, err := storage.InitPostgres(dbHost, dbPort, dbUser, dbPass, dbName)
+	if err != nil {
+		log.Fatalf("Failed to init Postgres: %v", err)
+	}
+	// Проверка соединения (необязательно)
+	if err := storage.TestDBConnection(ctx, db); err != nil {
+		log.Println("Postgres test query error:", err)
+	}
+
+	// 3. Инициализация Redis
+	redisHost := getEnv("REDIS_HOST", "localhost:6379")
+	redisPass := getEnv("REDIS_PASSWORD", "")
+	redisClient, err := storage.InitRedis(redisHost, redisPass, 0)
+	if err != nil {
+		log.Fatalf("Failed to init Redis: %v", err)
+	}
+	// Проверка Redis (необязательно)
+	if err := storage.TestRedisConnection(ctx, redisClient); err != nil {
+		log.Println("Redis test error:", err)
+	}
+
+	// 4. Регистрируем эндпоинты с помощью стандартной библиотеки
+	http.HandleFunc("/health", handlers.HealthHandler)
+
+	// Для /game/start нам нужно замкнуть на db и redisClient:
+	http.HandleFunc("/game/start", handlers.StartGameHandler(db, redisClient))
+
+	// 5. Запускаем сервер на :8080
+	srv := &http.Server{
+		Addr:         ":8080",
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second,
+		Handler:      http.DefaultServeMux, // используем стандартный ServeMux
+	}
+
+	log.Println("Starting server on :8080...")
+	if err := srv.ListenAndServe(); err != nil {
+		log.Fatalf("Server error: %v", err)
+	}
 }
 
-func main() {
-	// Считываем env-переменные
-	dbHost := os.Getenv("DB_HOST")
-	dbPort := os.Getenv("DB_PORT")
-	dbUser := os.Getenv("DB_USER")
-	dbPass := os.Getenv("DB_PASS")
-	dbName := os.Getenv("DB_NAME")
-
-	// Подключаемся к PostgreSQL
-	db, err := storage.NewDB(dbHost, dbPort, dbUser, dbPass, dbName)
-	if err != nil {
-		log.Fatalf("Failed to connect to DB: %v", err)
+// getEnv — вспомогательная функция для чтения переменных окружения с дефолтом
+func getEnv(key, defaultVal string) string {
+	if val, ok := os.LookupEnv(key); ok {
+		return val
 	}
-	defer db.Conn.Close()
-
-	// Тестовая выборка
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := db.ExampleQuery(ctx); err != nil {
-		log.Println("Error in ExampleQuery:", err)
-	}
-
-	// Регистрируем обработчик
-	http.HandleFunc("/health", healthHandler)
-
-	// Пример эндпоинта для старта игры
-	http.HandleFunc("/game/start", handlers.StartGameHandler)
-
-	// Запускаем сервер на порту 8080
-	log.Println("Starting server on http://localhost:8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
+	return defaultVal
 }

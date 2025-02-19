@@ -4,15 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	_ "github.com/jackc/pgx/v5/stdlib" // импорт драйвера
+	"log"
+
+	_ "github.com/jackc/pgx/v5/stdlib" // драйвер pgx
 )
 
-type DB struct {
-	Conn *sql.DB
-}
-
-// NewDB инициализирует подключение к PostgreSQL
-func NewDB(host, port, user, pass, dbname string) (*DB, error) {
+// InitPostgres — инициализируем соединение к PostgreSQL
+func InitPostgres(host, port, user, pass, dbname string) (*sql.DB, error) {
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
 		user, pass, host, port, dbname)
 
@@ -20,22 +18,20 @@ func NewDB(host, port, user, pass, dbname string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open db: %w", err)
 	}
-
-	// Проверим соединение
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping db: %w", err)
 	}
-
-	return &DB{Conn: db}, nil
+	log.Printf("Connected to PostgreSQL (%s:%s/%s)\n", host, port, dbname)
+	return db, nil
 }
 
-// ExampleQuery демонстрирует простую выборку
-func (db *DB) ExampleQuery(ctx context.Context) error {
+// TestDBConnection — пример тестового запроса (необязательно)
+func TestDBConnection(ctx context.Context, db *sql.DB) error {
 	var version string
-	err := db.Conn.QueryRowContext(ctx, "SELECT version()").Scan(&version)
+	err := db.QueryRowContext(ctx, "SELECT version()").Scan(&version)
 	if err != nil {
 		return err
 	}
-	fmt.Println("PostgreSQL version:", version)
+	log.Println("PostgreSQL version:", version)
 	return nil
 }

@@ -8,9 +8,17 @@ services:
       POSTGRES_DB: guessdb
     ports:
       - "5432:5432"
-    # Пример для хранения данных вне контейнера:
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: guess-game-redis
+    ports:
+      - "6379:6379"
+    # Если хотим сохранять данные в volume:
+    volumes:
+      - redis_data:/data
 
   guess-game:
     build: .
@@ -26,16 +34,20 @@ services:
     depends_on:
       - db
 
-  # Отдельная служба для выполнения миграций
   migrations:
-    image: "migrate/migrate:v4.18.2"
+    # Используем тег, который точно есть на Docker Hub
+    image: "migrate/migrate:v4.15.1"
     container_name: guess-game-migrations
     depends_on:
       - db
     volumes:
-      # Пример: монтируем локальную папку с миграциями внутрь контейнера
       - ./db/migrations:/migrations
-    command: ["-path", "/migrations", "-database", "postgres://gguser:ggpass@db:5432/guessdb?sslmode=disable", "up"]
+    command: [
+      "-path", "/migrations",
+      "-database", "postgres://gguser:ggpass@db:5432/guessdb?sslmode=disable",
+      "up"
+    ]
 
 volumes:
   postgres_data:
+  redis_data:
