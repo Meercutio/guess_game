@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:15
+    container_name: guess-game-postgres
+    environment:
+      POSTGRES_USER: gguser
+      POSTGRES_PASSWORD: ggpass
+      POSTGRES_DB: guessdb
+    ports:
+      - "5432:5432"
+    # Пример для хранения данных вне контейнера:
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  guess-game:
+    build: .
+    container_name: guess-game
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=gguser
+      - DB_PASS=ggpass
+      - DB_NAME=guessdb
+    depends_on:
+      - db
+
+  # Отдельная служба для выполнения миграций
+  migrations:
+    image: "migrate/migrate:v4.18.2"
+    container_name: guess-game-migrations
+    depends_on:
+      - db
+    volumes:
+      # Пример: монтируем локальную папку с миграциями внутрь контейнера
+      - ./db/migrations:/migrations
+    command: ["-path", "/migrations", "-database", "postgres://gguser:ggpass@db:5432/guessdb?sslmode=disable", "up"]
+
+volumes:
+  postgres_data:
