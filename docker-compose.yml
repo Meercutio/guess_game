@@ -31,8 +31,10 @@ services:
       - DB_USER=gguser
       - DB_PASS=ggpass
       - DB_NAME=guessdb
+      - REDIS_HOST=redis:6379
     depends_on:
       - db
+      - redis
 
   migrations:
     # Используем тег, который точно есть на Docker Hub
