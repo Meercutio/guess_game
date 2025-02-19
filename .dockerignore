@@ -1,0 +1,15 @@
+# Игнорируем скрытые системные файлы, папки .git, IDE
+.git
+.gitignore
+.idea
+.vscode
+
+# Исключаем папки для сборок, кэш
+dist/
+bin/
+build/
+*.out
+
+# Исключаем тестовые покрытия
+coverage.out
+*.coverprofile
