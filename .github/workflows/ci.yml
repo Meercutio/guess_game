@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  # События, при которых будет запускаться workflow
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Устанавливаем нужную версию Go
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.22
+
+      # Устанавливаем golangci-lint (для линтинга)
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+      # Запускаем линтер
+      - name: Lint
+        run: golangci-lint run ./...
+
+      # Запускаем тесты
+      - name: Test
+        run: |
+          go mod tidy
+          go test ./... -v
+
+      # Авторизуемся в Docker Registry (Docker Hub или другой)
+      # Предполагается, что вы в репо GitHub Actions Secrets сохранили
+      # DOCKERHUB_USERNAME и DOCKERHUB_PASSWORD
+      - name: Docker login
+        run: |
+          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      # Собираем Docker-образ
+      - name: Build Docker image
+        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/guess-game:latest .
+
+      # Пушим Docker-образ
+      - name: Push Docker image
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/guess-game:latest
